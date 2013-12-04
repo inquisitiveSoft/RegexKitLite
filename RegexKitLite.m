@@ -483,7 +483,7 @@ enum { RKLScannedOption = 0 };
 
 RKL_STATIC_INLINE void *rkl_realloc                   (void **ptr, size_t size, NSUInteger flags) RKL_ALLOC_SIZE_NON_NULL_ARGS_WARN_UNUSED(2,1);
 RKL_STATIC_INLINE void *rkl_free                      (void **ptr)                                RKL_NONNULL_ARGS(1);
-RKL_STATIC_INLINE id    rkl_CFAutorelease             (CFTypeRef CF_CONSUMED obj)                 RKL_WARN_UNUSED_NONNULL_ARGS(1);
+RKL_STATIC_INLINE id    rkl_CFAutorelease             (CFTypeRef obj)                             RKL_WARN_UNUSED_NONNULL_ARGS(1);
 RKL_STATIC_INLINE id    rkl_CreateAutoreleasedArray   (void **objects, NSUInteger count)          RKL_WARN_UNUSED_NONNULL_ARGS(1);
 RKL_STATIC_INLINE id    rkl_CreateArrayWithObjects    (void **objects, NSUInteger count)          RKL_WARN_UNUSED_NONNULL_ARGS(1);
 RKL_STATIC_INLINE id    rkl_CreateStringWithSubstring (id string, NSRange range)                  RKL_WARN_UNUSED_NONNULL_ARGS(1);
@@ -491,7 +491,7 @@ RKL_STATIC_INLINE id    rkl_ReleaseObject             (id obj)                  
 
 RKL_STATIC_INLINE void *rkl_realloc                   (void **ptr, size_t size, NSUInteger flags RKL_UNUSED_ARG) { return((*ptr = reallocf(*ptr, size))); }
 RKL_STATIC_INLINE void *rkl_free                      (void **ptr)                                               { if(*ptr != NULL) { free(*ptr); *ptr = NULL; } return(NULL); }
-RKL_STATIC_INLINE id    rkl_CFAutorelease             (CFTypeRef CF_CONSUMED obj)                                              { return([(id)obj autorelease]); }
+RKL_STATIC_INLINE id    rkl_CFAutorelease             (CFTypeRef obj)                                            { return([(id)obj autorelease]); }
 RKL_STATIC_INLINE id    rkl_CreateArrayWithObjects    (void **objects, NSUInteger count)                         { return((id)CFArrayCreate(NULL, (const void **)objects, (CFIndex)count, &rkl_transferOwnershipArrayCallBacks)); }
 RKL_STATIC_INLINE id    rkl_CreateAutoreleasedArray   (void **objects, NSUInteger count)                         { return(rkl_CFAutorelease(rkl_CreateArrayWithObjects(objects, count))); }
 RKL_STATIC_INLINE id    rkl_CreateStringWithSubstring (id string, NSRange range)                                 { return((id)CFStringCreateWithSubstring(NULL, (CFStringRef)string, CFMakeRange((CFIndex)range.location, (CFIndex)range.length))); }
@@ -1087,8 +1087,6 @@ static id rkl_performDictionaryVarArgsOp(id self, SEL _cmd, RKLRegexOp regexOp, 
 
 #pragma mark Primary internal function that Objective-C methods call to perform regular expression operations
 
-#ifndef __clang_analyzer__
-
 static id rkl_performRegexOp(id self, SEL _cmd, RKLRegexOp regexOp, NSString *regexString, RKLRegexOptions options, NSInteger capture, id matchString, NSRange *matchRange, NSString *replacementString, NSError **error, void *result, NSUInteger captureKeysCount, id captureKeys[captureKeysCount], const int captureKeyIndexes[captureKeysCount]) {
   volatile NSUInteger RKL_CLEANUP(rkl_cleanup_cacheSpinLockStatus) rkl_cacheSpinLockStatus = 0UL;
   
@@ -1169,7 +1167,7 @@ static id rkl_performRegexOp(id self, SEL _cmd, RKLRegexOp regexOp, NSString *re
   
 exitNow:
   OSSpinLockUnlock(&rkl_cacheSpinLock);
-  rkl_cacheSpinLockStatus |= RKLUnlockedCacheSpinLock;  (void) rkl_cacheSpinLockStatus; /* suppress warning about stackSize */
+  rkl_cacheSpinLockStatus |= RKLUnlockedCacheSpinLock; // Warning about rkl_cacheSpinLockStatus never being read can be safely ignored.
   
   if(RKL_EXPECTED(status     > U_ZERO_ERROR, 0L) && RKL_EXPECTED(exception == NULL, 0L)) { exception = rkl_NSExceptionForRegex(regexString, options, NULL, status); } // If we had a problem, prepare an exception to be thrown.
   if(RKL_EXPECTED(exception != NULL,         0L))                                        { rkl_handleDelayedAssert(self, _cmd, exception);                          } // If there is an exception, throw it at this point.
@@ -1191,8 +1189,6 @@ exitNow:
   }
   return(resultObject);
 }
-
-#endif
 
 static void rkl_handleDelayedAssert(id self, SEL _cmd, id exception) {
   if(RKL_EXPECTED(exception != NULL, 1L)) {
@@ -1434,7 +1430,6 @@ exitNow:
 #pragma mark Convert bulk results from rkl_findRanges in to various NSDictionary types
 
 static id rkl_makeDictionary(RKLCachedRegex *cachedRegex, RKLRegexOp regexOp, RKLFindAll *findAll, NSUInteger captureKeysCount, id captureKeys[captureKeysCount], const int captureKeyIndexes[captureKeysCount], id *exception RKL_UNUSED_ASSERTION_ARG) {
-#ifndef __clang_analyzer__
   NSUInteger                      matchedStringIndex  = 0UL, createdStringsCount = 0UL, createdDictionariesCount = 0UL, matchedDictionariesCount = (findAll->found / (cachedRegex->captureCount + 1UL)), transferredDictionariesCount = 0UL;
   id           *  RKL_GC_VOLATILE matchedStrings      = NULL, * RKL_GC_VOLATILE matchedKeys = NULL, emptyString = @"";
   id              RKL_GC_VOLATILE returnObject        = NULL;
@@ -1502,7 +1497,6 @@ exitNow2:
   }
   
   return(returnObject);
-#endif
 }
 
 //  IMPORTANT!   This code is critical path code.  Because of this, it has been written for speed, not clarity.
@@ -1512,7 +1506,6 @@ exitNow2:
 #pragma mark Perform "search and replace" operations on strings using ICUs uregex_*replace* functions
 
 static NSString *rkl_replaceString(RKLCachedRegex *cachedRegex, id searchString, NSUInteger searchU16Length, NSString *replacementString, NSUInteger replacementU16Length, NSInteger *replacedCountPtr, NSUInteger replaceMutable, id *exception, int32_t *status) {
-#ifndef __clang_analyzer__
   RKL_STRONG_REF UniChar       * RKL_GC_VOLATILE tempUniCharBuffer  = NULL;
   RKL_STRONG_REF const UniChar * RKL_GC_VOLATILE replacementUniChar = NULL;
   uint64_t           searchU16Length64  = (uint64_t)searchU16Length, replacementU16Length64 = (uint64_t)replacementU16Length;
@@ -1554,7 +1547,7 @@ static NSString *rkl_replaceString(RKLCachedRegex *cachedRegex, id searchString,
     // http://lists.apple.com/archives/Cocoa-dev/2010/Jan/msg01011.html
     needU16Capacity += 4;
     tempUniCharBufferSize = ((size_t)(tempUniCharBufferU16Capacity = needU16Capacity + 4) * sizeof(UniChar)); // Use needU16Capacity. Bug 2890810.
-	  if((stackSize + tempUniCharBufferSize) < (size_t)_RKL_STACK_LIMIT) { if(RKL_EXPECTED((tempUniCharBuffer = (RKL_STRONG_REF UniChar * RKL_GC_VOLATILE)alloca(tempUniCharBufferSize))                                  == NULL, 0L)) { goto exitNow; } stackSize += tempUniCharBufferSize; (void) stackSize; /* suppress warning about stackSize */ } 
+    if((stackSize + tempUniCharBufferSize) < (size_t)_RKL_STACK_LIMIT) { if(RKL_EXPECTED((tempUniCharBuffer = (RKL_STRONG_REF UniChar * RKL_GC_VOLATILE)alloca(tempUniCharBufferSize))                                  == NULL, 0L)) { goto exitNow; } stackSize += tempUniCharBufferSize; } // Warning about stackSize can be safely ignored.
     else                                                               { if(RKL_EXPECTED((tempUniCharBuffer = (RKL_STRONG_REF UniChar * RKL_GC_VOLATILE)rkl_realloc(&rkl_scratchBuffer[0], tempUniCharBufferSize, 0UL)) == NULL, 0L)) { goto exitNow; } }
     
     *status         = U_ZERO_ERROR; // Make sure the status var is cleared and try again.
@@ -1590,7 +1583,6 @@ exitNow:
   if(rkl_scratchBuffer[1] != NULL) { rkl_scratchBuffer[1] = rkl_free(&rkl_scratchBuffer[1]); }
   if(replacedCountPtr     != NULL) { *replacedCountPtr    = replacedCount;                   }
   return(resultObject);
-#endif
 } // The two warnings about potential leaks can be safely ignored.
 
 //  IMPORTANT!   Should only be called from rkl_replaceString().
@@ -1661,7 +1653,7 @@ static NSUInteger rkl_isRegexValid(id self, SEL _cmd, NSString *regex, RKLRegexO
   if(RKL_EXPECTED((cachedRegex = rkl_getCachedRegex(regex, options, error, &exception)) != NULL, 1L)) { gotCachedRegex = 1UL; captureCount = cachedRegex->captureCount; }
   cachedRegex = NULL;
   OSSpinLockUnlock(&rkl_cacheSpinLock);
-  rkl_cacheSpinLockStatus |= RKLUnlockedCacheSpinLock; (void) rkl_cacheSpinLockStatus; /* suppress warning about stackSize */ 
+  rkl_cacheSpinLockStatus |= RKLUnlockedCacheSpinLock; // Warning about rkl_cacheSpinLockStatus never being read can be safely ignored.
   
   if(captureCountPtr != NULL) { *captureCountPtr = captureCount; }
   if(RKL_EXPECTED(exception != NULL, 0L)) { rkl_handleDelayedAssert(self, _cmd, exception); }
@@ -1856,7 +1848,7 @@ static id rkl_performEnumerationUsingBlock(id self, SEL _cmd,
 exitNow:
   if((rkl_cacheSpinLockStatus & RKLLockedCacheSpinLock) != 0UL) { // In case we arrive at exitNow: without obtaining the rkl_cacheSpinLock.
     OSSpinLockUnlock(&rkl_cacheSpinLock);
-    rkl_cacheSpinLockStatus |= RKLUnlockedCacheSpinLock; (void) rkl_cacheSpinLockStatus; /* suppress warning about stackSize */ 
+    rkl_cacheSpinLockStatus |= RKLUnlockedCacheSpinLock; // Warning about rkl_cacheSpinLockStatus never being read can be safely ignored.
   }
 
   if(RKL_EXPECTED(self == NULL, 0L) || RKL_EXPECTED(retrievedCachedRegex == NULL, 0L) || RKL_EXPECTED(cachedRegex.icu_regex == NULL, 0L) || RKL_EXPECTED(status != U_ZERO_ERROR, 0L) || RKL_EXPECTED(exception != NULL, 0L)) { goto errorExit; }
@@ -1982,7 +1974,6 @@ static id rkl_performEnumerationUsingBlock(id self, SEL _cmd,
                                            NSError **error,
                                            void (^stringsAndRangesBlock)(NSInteger capturedCount, NSString * const capturedStrings[capturedCount], const NSRange capturedStringRanges[capturedCount], volatile BOOL * const stop),
                                            NSString *(^replaceStringsAndRangesBlock)(NSInteger capturedCount, NSString * const capturedStrings[capturedCount], const NSRange capturedStringRanges[capturedCount], volatile BOOL * const stop)) {
-#ifndef __clang_analyzer__
   NSMutableArray            * RKL_GC_VOLATILE autoreleaseArray              = NULL;
   RKLBlockEnumerationHelper * RKL_GC_VOLATILE blockEnumerationHelper        = NULL;
   NSMutableString           * RKL_GC_VOLATILE mutableReplacementString      = NULL;
@@ -2174,7 +2165,6 @@ exitNow2:
   if(replacedCountPtr != NULL) { *replacedCountPtr = replacedCount; }
   if(errorFreePtr     != NULL) { *errorFreePtr     = errorFree;     }
   return(returnObject);
-#endif
 } // The two warnings about potential leaks can be safely ignored.
 
 #endif // _RKL_BLOCKS_ENABLED
@@ -2191,14 +2181,12 @@ exitNow2:
 
 + (void)RKL_METHOD_PREPEND(clearStringCache)
 {
-#ifndef __clang_analyzer__
   volatile NSUInteger RKL_CLEANUP(rkl_cleanup_cacheSpinLockStatus) rkl_cacheSpinLockStatus = 0UL;
   OSSpinLockLock(&rkl_cacheSpinLock);
   rkl_cacheSpinLockStatus |= RKLLockedCacheSpinLock;
   rkl_clearStringCache();
   OSSpinLockUnlock(&rkl_cacheSpinLock);
-	rkl_cacheSpinLockStatus |= RKLUnlockedCacheSpinLock; // Warning about rkl_cacheSpinLockStatus never being read can be safely ignored.
-#endif
+  rkl_cacheSpinLockStatus |= RKLUnlockedCacheSpinLock; // Warning about rkl_cacheSpinLockStatus never being read can be safely ignored.
 }
 
 #pragma mark +captureCountForRegex:
@@ -2290,7 +2278,6 @@ exitNow2:
 
 - (void)RKL_METHOD_PREPEND(flushCachedRegexData)
 {
-#ifndef __clang_analyzer__
   volatile NSUInteger RKL_CLEANUP(rkl_cleanup_cacheSpinLockStatus) rkl_cacheSpinLockStatus = 0UL;
 
   CFIndex    selfLength = CFStringGetLength((CFStringRef)self);
@@ -2309,8 +2296,7 @@ exitNow2:
   for(idx = 0UL; idx < _RKL_LRU_CACHE_SET_WAYS; idx++) { RKLBuffer *buffer = &rkl_lruDynamicBuffer[idx]; if((buffer->string != NULL) && ((buffer->string == (CFStringRef)self) || ((buffer->length == selfLength) && (buffer->hash == selfHash)))) { rkl_clearBuffer(buffer, 0UL); } }
 
   OSSpinLockUnlock(&rkl_cacheSpinLock);
-	rkl_cacheSpinLockStatus |= RKLUnlockedCacheSpinLock; // Warning about rkl_cacheSpinLockStatus never being read can be safely ignored.
-#endif
+  rkl_cacheSpinLockStatus |= RKLUnlockedCacheSpinLock; // Warning about rkl_cacheSpinLockStatus never being read can be safely ignored.
 }
 
 #pragma mark -rangeOfRegex:
@@ -2526,7 +2512,6 @@ exitNow2:
   va_end(varArgsList);
   return(returnObject);
 }
-
 
 - (NSArray *)RKL_METHOD_PREPEND(arrayOfDictionariesByMatchingRegex):(NSString *)regex options:(RKLRegexOptions)options range:(NSRange)range error:(NSError **)error withFirstKey:(id)firstKey arguments:(va_list)varArgsList
 {
