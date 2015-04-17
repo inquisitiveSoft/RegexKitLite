@@ -963,11 +963,19 @@ setRegexText:
   
 exitNow:
 #ifdef    _RKL_DTRACE_ENABLED
-  rkl_dtrace_addLookupFlag(lookupResultFlags, RKLErrorLookupFlag); 
-  if(cachedRegex != NULL) { rkl_dtrace_utf16ConversionCache(lookupResultFlags, cachedRegex->setToString, cachedRegex->setToRange.location, cachedRegex->setToRange.length, cachedRegex->setToLength); }
+	rkl_dtrace_addLookupFlag(lookupResultFlags, RKLErrorLookupFlag);
+	if(cachedRegex != NULL) {
+		rkl_dtrace_utf16ConversionCache(lookupResultFlags, cachedRegex->setToString, cachedRegex->setToRange.location, cachedRegex->setToRange.length, cachedRegex->setToLength);
+	}
 #endif // _RKL_DTRACE_ENABLED
-  if(cachedRegex != NULL) { cachedRegex->buffer = NULL; cachedRegex->setToRange = NSNotFoundRange; cachedRegex->lastFindRange = NSNotFoundRange; cachedRegex->lastMatchRange = NSNotFoundRange; }
-  return(0UL);
+	if(cachedRegex) {
+		cachedRegex->buffer = NULL;
+		cachedRegex->setToRange = NSNotFoundRange;
+		cachedRegex->lastFindRange = NSNotFoundRange;
+		cachedRegex->lastMatchRange = NSNotFoundRange;
+	}
+	
+	return(0UL);
 }
 
 //  IMPORTANT!   This code is critical path code.  Because of this, it has been written for speed, not clarity.
@@ -1005,7 +1013,6 @@ static RKLCachedRegex *rkl_getCachedRegexSetToString(NSString *regexString, RKLR
     RKLCDelayedAssert(cachedRegex->setToString != NULL, exception, exitNow);
     cachedRegex->setToUniChar         = CFStringGetCharactersPtr(cachedRegex->setToString);
     cachedRegex->setToNeedsConversion = (cachedRegex->setToUniChar == NULL) ? 1U : 0U;
-    cachedRegex->setToIsImmutable     = (rkl_CFStringIsMutable(cachedRegex->setToString) == YES) ? 0U : 1U; // If RKL_FAST_MUTABLE_CHECK is not defined then setToIsImmutable will always be set to '0', or in other words mutable..
     cachedRegex->setToHash            = CFHash((CFTypeRef)cachedRegex->setToString);
     cachedRegex->setToRange           = NSNotFoundRange;
     cachedRegex->setToLength          = matchLength;
@@ -1014,6 +1021,7 @@ static RKLCachedRegex *rkl_getCachedRegexSetToString(NSString *regexString, RKLR
   
   if(RKL_EXPECTED(rkl_setCachedRegexToString(cachedRegex, matchRange, status, exception) == 0UL, 0L)) { cachedRegex = NULL; if(*exception == NULL) { *exception = (id)RKLCAssertDictionary(@"Failed to set up UTF16 buffer."); } goto exitNow; }
   
+		cachedRegex->setToIsImmutable     = (rkl_CFStringIsMutable(cachedRegex->setToString) == (YES)) ? 0U : 1U; // If RKL_FAST_MUTABLE_CHECK is not defined then setToIsImmutable will always be set to '0', or in other words mutable..
 exitNow:
   return(cachedRegex);
   //  ----------   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -1196,7 +1204,7 @@ static void rkl_handleDelayedAssert(id self, SEL _cmd, id exception) {
     else {
       id functionString = [exception objectForKey:@"function"], fileString = [exception objectForKey:@"file"], descriptionString = [exception objectForKey:@"description"], lineNumber = [exception objectForKey:@"line"];
       RKLCHardAbortAssert((functionString != NULL) && (fileString != NULL) && (descriptionString != NULL) && (lineNumber != NULL));
-      [[NSAssertionHandler currentHandler] handleFailureInFunction:functionString file:fileString lineNumber:(NSInteger)[lineNumber longValue] description:descriptionString];
+      [[NSAssertionHandler currentHandler] handleFailureInFunction:functionString file:fileString lineNumber:(NSInteger)[lineNumber longValue] description:@"%@", descriptionString];
     }
   }
 }
@@ -1863,7 +1871,7 @@ exitNow:
   if((buffer.uniChar = (UniChar *)CFStringGetCharactersPtr(buffer.string)) == NULL) {
     rkl_dtrace_addLookupFlag(lookupResultFlags, RKLConversionRequiredLookupFlag);
     if(RKL_EXPECTED((buffer.uniChar = (RKL_STRONG_REF UniChar * RKL_GC_VOLATILE)rkl_realloc((RKL_STRONG_REF void ** RKL_GC_VOLATILE)&buffer.uniChar, ((size_t)buffer.length * sizeof(UniChar)), 0UL)) == NULL, 0L)) { goto errorExit; } // Resize the buffer.
-    needToFreeBufferUniChar = rkl_collectingEnabled() ? 0U : 1U;
+    needToFreeBufferUniChar = (rkl_collectingEnabled() == (TRUE)) ? 0U : 1U;
     CFStringGetCharacters(buffer.string, CFMakeRange(0L, buffer.length), (UniChar *)buffer.uniChar); // Convert to a UTF16 string.
   }
 
@@ -1884,6 +1892,7 @@ exitNow:
 
   return(self);
 
+		needToFreeBufferUniChar = (rkl_collectingEnabled() == (TRUE)) ? 0U : 1U; // Currently rkl_collectingEnabled is defined to be FALSE
 errorExit:
   if(RKL_EXPECTED(self      != NULL,         1L))                                        {  [self autorelease]; }
   if(RKL_EXPECTED(status     > U_ZERO_ERROR, 0L) && RKL_EXPECTED(exception == NULL, 0L)) {  exception = rkl_NSExceptionForRegex(initRegexString, initOptions, NULL, status); } // If we had a problem, prepare an exception to be thrown.
