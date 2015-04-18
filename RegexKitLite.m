@@ -93,15 +93,21 @@
 #define _RKL_DTRACE_ENABLED 1
 #endif // defined(RKL_DTRACE) && (RKL_DTRACE != 0)
 
+
 // These are internal, non-public tunables.
 #define _RKL_FIXED_LENGTH                ((NSUInteger)RKL_FIXED_LENGTH)
 #define _RKL_STACK_LIMIT                 ((NSUInteger)RKL_STACK_LIMIT)
-#define _RKL_SCRATCH_BUFFERS             (5UL)
-#if       _RKL_SCRATCH_BUFFERS != 5
-#error _RKL_SCRATCH_BUFFERS is not tunable, it must be set to 5.
-#endif // _RKL_SCRATCH_BUFFERS != 5
+#define _RKL_SCRATCH_BUFFERS             (5UL) // Not tunable, it must be set to 5.
 #define _RKL_PREFETCH_SIZE               (64UL)
 #define _RKL_DTRACE_REGEXUTF8_SIZE       (64UL)
+
+
+// If it looks like low memory notifications might be available, add code to register and respond to them.
+// This is (should be) harmless if it turns out that this isn't the case, since the notification that we register for,
+// UIApplicationDidReceiveMemoryWarningNotification, is dynamically looked up via dlsym().
+#if ((defined(TARGET_OS_EMBEDDED) && (TARGET_OS_EMBEDDED != 0)) || (defined(TARGET_OS_IPHONE) && (TARGET_OS_IPHONE != 0))) && (!defined(RKL_REGISTER_FOR_IPHONE_LOW_MEMORY_NOTIFICATIONS) || (RKL_REGISTER_FOR_IPHONE_LOW_MEMORY_NOTIFICATIONS != 0))
+#define RKL_REGISTER_FOR_IPHONE_LOW_MEMORY_NOTIFICATIONS 1
+#endif
 
 
 // A LRU Cache Set holds 4 lines, and the LRU algorithm uses 4 bits per line.
@@ -199,13 +205,13 @@ RKL_STATIC_INLINE BOOL NSRangeInsideRange(NSRange cin, NSRange win) {
 	return(((cin.location - win.location) <= win.length) && ((NSMaxRange(cin) - win.location) <= win.length));
 }
 
-#define NSMakeRange(loc, len) ((NSRange){.location=(NSUInteger)(loc),      .length=(NSUInteger)(len)})
-#define CFMakeRange(loc, len) ((CFRange){.location=   (CFIndex)(loc),      .length=   (CFIndex)(len)})
-#define NSNotFoundRange       ((NSRange){.location=(NSUInteger)NSNotFound, .length=              0UL})
-#define NSMaxiumRange         ((NSRange){.location=                   0UL, .length=    NSUIntegerMax})
+#define NSMakeRange(loc, len) ((NSRange){.location = (NSUInteger)(loc),      .length = (NSUInteger)(len)})
+#define CFMakeRange(loc, len) ((CFRange){.location = (CFIndex)(loc),         .length = (CFIndex)(len)})
+#define NSNotFoundRange       ((NSRange){.location = (NSUInteger)NSNotFound, .length = 0UL})
+#define NSMaxiumRange         ((NSRange){.location = 0UL,                    .length = NSUIntegerMax})
 
 // These values are used to help tickle improper usage.
-#define RKLIllegalRange       ((NSRange){.location=          NSIntegerMax, .length=     NSIntegerMax})
+#define RKLIllegalRange       ((NSRange){.location = NSIntegerMax, .length = NSIntegerMax})
 #define RKLIllegalPointer     ((void *)0xBAD0C0DE)
 
 
@@ -343,8 +349,8 @@ static RKLCachedRegex *rkl_lastCachedRegex;
 static RKLLRUCacheSet_t     rkl_cachedRegexCacheSets[_RKL_REGEX_LRU_CACHE_SETS] = { [0 ... (_RKL_REGEX_LRU_CACHE_SETS - 1UL)] = _RKL_LRU_CACHE_SET_INIT };
 static RKLLookasideCache_t  rkl_regexLookasideCache[_RKL_REGEX_LOOKASIDE_CACHE_SIZE] RKL_ALIGNED(64);
 static OSSpinLock           rkl_cacheSpinLock = OS_SPINLOCK_INIT;
-static const UniChar        rkl_emptyUniCharString[1];                                // For safety, icu_regexes are 'set' to this when the string they were searched is cleared.
-static void * rkl_scratchBuffer[_RKL_SCRATCH_BUFFERS]; // Used to hold temporary allocations that are allocated via reallocf().
+static const UniChar        rkl_emptyUniCharString[1];	// For safety, icu_regexes are 'set' to this when the string they were searched is cleared.
+static void * rkl_scratchBuffer[_RKL_SCRATCH_BUFFERS];	// Used to hold temporary allocations that are allocated via reallocf().
 
 
 
@@ -388,8 +394,9 @@ RKL_STATIC_INLINE id    rkl_ReleaseObject             (id obj)                  
 #pragma mark -
 #pragma mark ICU function prototypes
 
-// ICU functions.  See http://www.icu-project.org/apiref/icu4c/uregex_8h.html Tweaked slightly from the originals, but functionally identical.
-const char u_errorName (int32_t status) RKL_WARN_UNUSED_PURE;
+// ICU functions.  See http://www.icu-project.org/apiref/icu4c/uregex_8h.html
+// Tweaked slightly from the originals, but functionally identical.
+const char * u_errorName (int32_t status) RKL_WARN_UNUSED_PURE;
 int32_t u_strlen (const UniChar *s) RKL_WARN_UNUSED_PURE_NONNULL_ARGS(1);
 int32_t uregex_appendReplacement(uregex *regexp, const UniChar *replacementText, int32_t replacementLength, UniChar **destBuf, int32_t *destCapacity, int32_t *status) RKL_WARN_UNUSED_NONNULL_ARGS(1,2,4,5,6);
 int32_t uregex_appendTail(uregex *regexp, UniChar **destBuf, int32_t *destCapacity, int32_t *status) RKL_WARN_UNUSED_NONNULL_ARGS(1,2,3,4);

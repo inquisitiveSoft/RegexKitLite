@@ -36,13 +36,12 @@
  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifdef    __OBJC__
+
 #import <Foundation/NSArray.h>
 #import <Foundation/NSError.h>
 #import <Foundation/NSObjCRuntime.h>
 #import <Foundation/NSRange.h>
 #import <Foundation/NSString.h>
-#endif // __OBJC__
 
 #include <limits.h>
 #include <stdint.h>
@@ -59,15 +58,10 @@ extern "C" {
 #ifndef REGEX_KIT_LITE
 #define REGEX_KIT_LITE
 
-#define _RKL_STRINGIFY(a) #a
-#define _RKL_JOIN_VERSION(a,b)   _RKL_STRINGIFY(a##.##b)
-#define _RKL_VERSION_STRING(a,b) _RKL_JOIN_VERSION(a,b)
-	
-#define REGEXKITLITE_VERSION_MAJOR 4
-#define REGEXKITLITE_VERSION_MINOR 1
-	
-#define REGEXKITLITE_VERSION_CSTRING _RKL_VERSION_STRING(REGEXKITLITE_VERSION_MAJOR, REGEXKITLITE_VERSION_MINOR)
-#define REGEXKITLITE_VERSION_NSSTRING @REGEXKITLITE_VERSION_CSTRING
+#define REGEXKITLITE_VERSION_NUMBER_MAJOR 4
+#define REGEXKITLITE_VERSION_NUMBER_MINOR 1
+
+#define REGEXKITLITE_VERSION_NUMBER_STRING @"4.1"
 
 
 // These must be identical to their ICU regex counterparts. See http://www.icu-project.org/userguide/regexp.html
@@ -89,29 +83,17 @@ typedef NS_ENUM(NSUInteger, RKLRegexEnumerationOptions) {
 };
 
 
-// Mechanism for appending a custom prefix to public methods
-// e.g: #define RKL_PREPEND_TO_METHODS AJK_
-
 // This requires a few levels of rewriting to get the desired results.
 #define _RKL_CONCAT_2(c,d) c ## d
 #define _RKL_CONCAT(a,b) _RKL_CONCAT_2(a,b)
 
+// Mechanism for appending a custom prefix to public methods
 #ifdef    RKL_PREPEND_TO_METHODS
 #define RKL_METHOD_PREPEND(x) _RKL_CONCAT(RKL_PREPEND_TO_METHODS, x)
 #else  // RKL_PREPEND_TO_METHODS
 #define RKL_METHOD_PREPEND(x) x
 #endif // RKL_PREPEND_TO_METHODS
 
-
-// If it looks like low memory notifications might be available, add code to register and respond to them.
-// This is (should be) harmless if it turns out that this isn't the case, since the notification that we register for,
-// UIApplicationDidReceiveMemoryWarningNotification, is dynamically looked up via dlsym().
-#if ((defined(TARGET_OS_EMBEDDED) && (TARGET_OS_EMBEDDED != 0)) || (defined(TARGET_OS_IPHONE) && (TARGET_OS_IPHONE != 0))) && (!defined(RKL_REGISTER_FOR_IPHONE_LOW_MEMORY_NOTIFICATIONS) || (RKL_REGISTER_FOR_IPHONE_LOW_MEMORY_NOTIFICATIONS != 0))
-#define RKL_REGISTER_FOR_IPHONE_LOW_MEMORY_NOTIFICATIONS 1
-#endif
-
-
-#ifdef __OBJC__
 
 // NSException exception name.
 extern NSString * const RKLICURegexException;
@@ -224,7 +206,6 @@ extern NSString * const RKLICURegexSubjectStringErrorKey;
 
 @end
 
-#endif // __OBJC__
 	
 #endif // REGEX_KIT_LITE
 
