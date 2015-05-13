@@ -856,10 +856,14 @@ exitNow:
 #ifdef    _RKL_DTRACE_ENABLED
 	rkl_dtrace_addLookupFlag(lookupResultFlags, RKLErrorLookupFlag);
 	if(cachedRegex != NULL) {
-		rkl_dtrace_utf16ConversionCache(lookupResultFlags, cachedRegex->setToString, cachedRegex->setToRange.location, cachedRegex->setToRange.length, cachedRegex->setToLength);
+		rkl_dtrace_utf16ConversionCache(lookupResultFlags,
+                                        cachedRegex->setToString,
+                                        cachedRegex->setToRange.location,
+                                        cachedRegex->setToRange.length,
+                                        cachedRegex->setToLength);
 	}
 #endif // _RKL_DTRACE_ENABLED
-	if(cachedRegex) {
+	if(cachedRegex != NULL) {
 		cachedRegex->buffer = NULL;
 		cachedRegex->setToRange = NSNotFoundRange;
 		cachedRegex->lastFindRange = NSNotFoundRange;
@@ -1471,7 +1475,9 @@ static NSString *rkl_replaceString(RKLCachedRegex *cachedRegex, id searchString,
 		// http://lists.apple.com/archives/Cocoa-dev/2010/Jan/msg01011.html
 		needU16Capacity += 4;
 		tempUniCharBufferSize = ((size_t)(tempUniCharBufferU16Capacity = needU16Capacity + 4) * sizeof(UniChar)); // Use needU16Capacity. Bug 2890810.
-		if((stackSize + tempUniCharBufferSize) < (size_t)_RKL_STACK_LIMIT) { if(RKL_EXPECTED((tempUniCharBuffer = (UniChar *)alloca(tempUniCharBufferSize))                                  == NULL, 0L)) { goto exitNow; } stackSize += tempUniCharBufferSize; } // Warning about stackSize can be safely ignored.
+		if((stackSize + tempUniCharBufferSize) < (size_t)_RKL_STACK_LIMIT) { if(RKL_EXPECTED((tempUniCharBuffer = (UniChar *)alloca(tempUniCharBufferSize))                                  == NULL, 0L)) { goto exitNow; }
+            //stackSize += tempUniCharBufferSize; // Warning about stackSize can be safely ignored.
+        }
 		else                                                               { if(RKL_EXPECTED((tempUniCharBuffer = (UniChar *)rkl_realloc(&rkl_scratchBuffer[0], tempUniCharBufferSize, 0UL)) == NULL, 0L)) { goto exitNow; } }
 		
 		*status         = U_ZERO_ERROR; // Make sure the status var is cleared and try again.
