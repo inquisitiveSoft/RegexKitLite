@@ -1037,20 +1037,37 @@ static id rkl_performRegexOp(id self, SEL _cmd, RKLRegexOp regexOp, NSString *re
 	
 	if((dictionaryOp == YES) && RKL_EXPECTED(cachedRegex != NULL, 1L) && RKL_EXPECTED(exception == NULL, 1L)) {
 		for(tmpIdx = 0UL; tmpIdx < captureKeysCount; tmpIdx++) {
-			if(RKL_EXPECTED(captureKeys[tmpIdx] == NULL, 0L)) { exception = (id)RKL_EXCEPTION(NSInvalidArgumentException, @"The capture key (key %lu of %lu) is NULL.", (unsigned long)(tmpIdx + 1UL), (unsigned long)captureKeysCount); break; }
-			if((RKL_EXPECTED(captureKeyIndexes[tmpIdx] < 0, 0L) || RKL_EXPECTED(captureKeyIndexes[tmpIdx] > cachedRegex->captureCount, 0L))) { exception = (id)RKL_EXCEPTION(NSInvalidArgumentException, @"The capture argument %d (capture %lu of %lu) for key '%@' is not valid.", captureKeyIndexes[tmpIdx], (unsigned long)(tmpIdx + 1UL), (unsigned long)captureKeysCount, captureKeys[tmpIdx]); break; }
+			if(RKL_EXPECTED(captureKeys[tmpIdx] == NULL, 0L)) {
+				exception = (id)RKL_EXCEPTION(NSInvalidArgumentException, @"The capture key (key %lu of %lu) is NULL.", (unsigned long)(tmpIdx + 1UL), (unsigned long)captureKeysCount);
+				break;
+			}
+			
+			if((RKL_EXPECTED(captureKeyIndexes[tmpIdx] < 0, 0L) || RKL_EXPECTED(captureKeyIndexes[tmpIdx] > cachedRegex->captureCount, 0L))) {
+				exception = (id)RKL_EXCEPTION(NSInvalidArgumentException, @"The capture argument %d (capture %lu of %lu) for key '%@' is not valid.", captureKeyIndexes[tmpIdx], (unsigned long)(tmpIdx + 1UL), (unsigned long)captureKeysCount, captureKeys[tmpIdx]);
+				break;
+			}
 		}
 	}
 	
-	if(RKL_EXPECTED(cachedRegex == NULL, 0L) || RKL_EXPECTED(status > U_ZERO_ERROR, 0L) || RKL_EXPECTED(exception != NULL, 0L)) { goto exitNow; }
+	if(RKL_EXPECTED(cachedRegex == NULL, 0L) || RKL_EXPECTED(status > U_ZERO_ERROR, 0L) || RKL_EXPECTED(exception != NULL, 0L)) {
+		goto exitNow;
+	}
 	
 	RKLCDelayedAssert(((cachedRegex >= rkl_cachedRegexes) && ((cachedRegex - rkl_cachedRegexes) < (ssize_t)_RKL_REGEX_CACHE_LINES)) && (cachedRegex != NULL) && (cachedRegex->icu_regex != NULL) && (cachedRegex->regexString != NULL) && (cachedRegex->captureCount >= 0L) && (cachedRegex->setToString != NULL) && (cachedRegex->setToLength >= 0L) && (cachedRegex->setToUniChar != NULL) && ((CFIndex)NSMaxRange(cachedRegex->setToRange) <= cachedRegex->setToLength), &exception, exitNow);
 	RKLCDelayedAssert((cachedRegex->setToNeedsConversion == 0U) ? ((cachedRegex->setToNeedsConversion == 0U) && (cachedRegex->setToUniChar == CFStringGetCharactersPtr(cachedRegex->setToString))) : ((cachedRegex->buffer != NULL) && (cachedRegex->setToHash == cachedRegex->buffer->hash) && (cachedRegex->setToLength == cachedRegex->buffer->length) && (cachedRegex->setToUniChar == cachedRegex->buffer->uniChar)), &exception, exitNow);
 	
 	switch(maskedRegexOp) {
 		case RKLRangeOp:
-			if((RKL_EXPECTED(rkl_search(cachedRegex, matchRange, 0UL, &exception, &status) == NO, 0L)) || (RKL_EXPECTED(status > U_ZERO_ERROR, 0L))) { *(NSRange *)result = NSNotFoundRange; goto exitNow; }
-			if(RKL_EXPECTED(capture == 0L, 1L)) { *(NSRange *)result = cachedRegex->lastMatchRange; } else { if(RKL_EXPECTED(rkl_getRangeForCapture(cachedRegex, &status, (int32_t)capture, (NSRange *)result) > U_ZERO_ERROR, 0L)) { goto exitNow; } }
+			if((RKL_EXPECTED(rkl_search(cachedRegex, matchRange, 0UL, &exception, &status) == NO, 0L)) || (RKL_EXPECTED(status > U_ZERO_ERROR, 0L))) {
+				*(NSRange *)result = NSNotFoundRange;
+				goto exitNow;
+			}
+			
+			if(RKL_EXPECTED(capture == 0L, 1L)) {
+				*(NSRange *)result = cachedRegex->lastMatchRange;
+			} else if(RKL_EXPECTED(rkl_getRangeForCapture(cachedRegex, &status, (int32_t)capture, (NSRange *)result) > U_ZERO_ERROR, 0L)) {
+				goto exitNow;
+			}
 			break;
 			
 		case RKLSplitOp:                         // Fall-thru...
@@ -1062,21 +1079,32 @@ static id rkl_performRegexOp(id self, SEL _cmd, RKLRegexOp regexOp, NSString *re
 			findAll = rkl_makeFindAll(stackRanges, *matchRange, 2048L, (2048UL * sizeof(NSRange)), 0UL, &rkl_scratchBuffer[0], &rkl_scratchBuffer[1], &rkl_scratchBuffer[2], &rkl_scratchBuffer[3], &rkl_scratchBuffer[4], 0L, capture, (((maskedRegexOp == RKLCapturesArrayOp) || (maskedRegexOp == RKLDictionaryOfCapturesOp)) ? 1L : NSIntegerMax));
 			
 			if(RKL_EXPECTED(rkl_findRanges(cachedRegex, regexOp, &findAll, &exception, &status) == NO, 1L)) {
-				if(RKL_EXPECTED(findAll.found == 0L, 0L)) { resultObject = (maskedRegexOp == RKLDictionaryOfCapturesOp) ? [NSDictionary dictionary] : [NSArray array]; }
-				else {
-					if(dictionaryOp == YES) { resultObject = rkl_makeDictionary (cachedRegex, regexOp, &findAll, captureKeysCount, captureKeys, captureKeyIndexes, &exception); }
-					else                    { resultObject = rkl_makeArray      (cachedRegex, regexOp, &findAll, &exception); }
+				if(RKL_EXPECTED(findAll.found == 0L, 0L)) {
+					resultObject = (maskedRegexOp == RKLDictionaryOfCapturesOp) ? [NSDictionary dictionary] : [NSArray array];
+				} else if(dictionaryOp == YES) {
+					resultObject = rkl_makeDictionary(cachedRegex, regexOp, &findAll, captureKeysCount, captureKeys, captureKeyIndexes, &exception);
+				} else {
+					resultObject = rkl_makeArray(cachedRegex, regexOp, &findAll, &exception);
 				}
 			}
 			
-			for(tmpIdx = 0UL; tmpIdx < _RKL_SCRATCH_BUFFERS; tmpIdx++) { if(RKL_EXPECTED(rkl_scratchBuffer[tmpIdx] != NULL, 0L)) { rkl_scratchBuffer[tmpIdx] = rkl_free(&rkl_scratchBuffer[tmpIdx]); } }
+			for(tmpIdx = 0UL; tmpIdx < _RKL_SCRATCH_BUFFERS; tmpIdx++) {
+				if(RKL_EXPECTED(rkl_scratchBuffer[tmpIdx] != NULL, 0L)) {
+					rkl_scratchBuffer[tmpIdx] = rkl_free(&rkl_scratchBuffer[tmpIdx]);
+				}
+			}
 			
 			break;
 			
-		case RKLReplaceOp: resultObject = rkl_replaceString(cachedRegex, matchString, stringU16Length, replacementString, (NSUInteger)CFStringGetLength((CFStringRef)replacementString), (NSInteger *)result, (replaceMutable = (((regexOp & RKLReplaceMutable) != 0) ? 1UL : 0UL)), &exception, &status); break;
+		case RKLReplaceOp:
+			resultObject = rkl_replaceString(cachedRegex, matchString, stringU16Length, replacementString, (NSUInteger)CFStringGetLength((CFStringRef)replacementString), (NSInteger *)result, (replaceMutable = (((regexOp & RKLReplaceMutable) != 0) ? 1UL : 0UL)), &exception, &status);
+			break;
 			
-		default:           exception    = RKLCAssertDictionary(@"Unknown regexOp code."); break;
+		default:
+			exception = RKLCAssertDictionary(@"Unknown regexOp code.");
+			break;
 	}
+	
 	
 exitNow:
 	OSSpinLockUnlock(&rkl_cacheSpinLock);
@@ -1100,6 +1128,7 @@ exitNow:
 		if(matchRange != NULL) { userInfoOptions |= RKLUserInfoSubjectRange; }
 		*error = rkl_makeNSError(userInfoOptions, regexString, options, NULL, status, matchString, (matchRange != NULL) ? *matchRange : NSNotFoundRange, replacementString, replacedString, replacedCount, (RKLRegexEnumerationOptions)RKLRegexEnumerationNoOptions, @"The ICU library returned an unexpected error.");
 	}
+	
 	return(resultObject);
 }
 
@@ -1457,7 +1486,7 @@ static NSString *rkl_replaceString(RKLCachedRegex *cachedRegex, id searchString,
 	// Buffer sizes converted from native units to bytes.
 	size_t stackSize = 0UL;
 	size_t replacementSize = ((size_t)replacementU16Length * sizeof(UniChar));
-	tempUniCharBufferSize = ((size_t)tempUniCharBufferU16Capacity * sizeof(UniChar));
+	size_t tempUniCharBufferSize = ((size_t)tempUniCharBufferU16Capacity * sizeof(UniChar));
 	
 	// For the various buffers we require, we first try to allocate from the stack if we're not over the RKL_STACK_LIMIT.  If we are, switch to using the heap for the buffer.
 	if((stackSize + tempUniCharBufferSize) < (size_t)_RKL_STACK_LIMIT) {
