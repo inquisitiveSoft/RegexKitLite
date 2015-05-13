@@ -54,6 +54,13 @@
 extern "C" {
 #endif
 
+	
+//! Project version number for RegexKitLite.
+FOUNDATION_EXPORT double RegexKitLiteVersionNumber;
+
+//! Project version string for RegexKitLite.
+FOUNDATION_EXPORT const unsigned char RegexKitLiteVersionString[];
+
 
 #ifndef REGEX_KIT_LITE
 #define REGEX_KIT_LITE
